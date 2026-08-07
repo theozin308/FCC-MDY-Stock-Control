@@ -1,9 +1,9 @@
 from datetime import datetime
 import io
 import textwrap
-from zoneinfo import ZoneInfo
 import matplotlib.pyplot as plt
 import pandas as pd
+import pytz
 import streamlit as st
 
 st.set_page_config(
@@ -12,8 +12,12 @@ st.set_page_config(
     layout="wide",
 )
 
-# Set Myanmar Timezone (UTC+6:30)
-MM_TZ = ZoneInfo("Asia/Yangon")
+# Set Myanmar Timezone (UTC+6:30) using pytz for reliable cloud deployment
+MM_TZ = pytz.timezone("Asia/Yangon")
+
+def get_mmt_now():
+    """Helper function to get current time in Myanmar Time Zone."""
+    return datetime.now(MM_TZ)
 
 # ---------------------------------------------------------
 # CUSTOM CSS FOR PROFESSIONAL SIDEBAR STYLING
@@ -79,8 +83,8 @@ INITIAL_DATA = [
 if "inventory" not in st.session_state:
     st.session_state.inventory = pd.DataFrame(INITIAL_DATA)
 
-if "last_updated" not in st.session_state:
-    st.session_state.last_updated = datetime.now(MM_TZ).strftime("%d %b %Y, %I:%M %p")
+if "last_updated_dt" not in st.session_state:
+    st.session_state.last_updated_dt = get_mmt_now()
 
 if "transaction_logs" not in st.session_state:
     st.session_state.transaction_logs = pd.DataFrame(
@@ -88,6 +92,9 @@ if "transaction_logs" not in st.session_state:
     )
 
 st.title("📦 Marketing Collaterals Stock List - FCC MDY")
+
+# Formatted timestamp string for display
+formatted_last_updated = st.session_state.last_updated_dt.strftime("%d %b %Y, %I:%M %p")
 
 # ---------------------------------------------------------
 # 2. ENHANCED SIDEBAR NAVIGATION
@@ -114,7 +121,7 @@ with st.sidebar:
 
     # System status indicator & timestamps (MMT)
     st.caption("🟢 **Status:** Operational")
-    st.caption(f"🕒 **Updated (MMT):** {st.session_state.last_updated}")
+    st.caption(f"🕒 **Updated (MMT):** {formatted_last_updated}")
     st.caption("🏢 **Location:** FCC Mandalay (UTC+6:30)")
 
 
@@ -208,7 +215,7 @@ def generate_report_png(df, title, is_log_report=False):
 # --- View Inventory ---
 if action == "📦 View Inventory":
     st.subheader("Current Stock Table")
-    st.caption(f"Updated As Of: **{st.session_state.last_updated} (MMT)**")
+    st.caption(f"Updated As Of: **{formatted_last_updated} (MMT)**")
     st.dataframe(st.session_state.inventory, use_container_width=True, hide_index=True)
 
 # --- Log Stock Movement ---
@@ -246,7 +253,7 @@ elif action == "🔄 Log Movement (Take / Add)":
             remark = st.text_input("Remark")
 
         if st.button("Confirm Movement & Log"):
-            now_mmt = datetime.now(MM_TZ)
+            now_mmt = get_mmt_now()
             if movement_type == "Take (Withdraw)":
                 if current_qty >= qty_change:
                     new_balance = current_qty - qty_change
@@ -265,7 +272,7 @@ elif action == "🔄 Log Movement (Take / Add)":
                         "Remark": remark,
                     }
                     st.session_state.transaction_logs = pd.concat([pd.DataFrame([new_log]), st.session_state.transaction_logs], ignore_index=True)
-                    st.session_state.last_updated = now_mmt.strftime("%d %b %Y, %I:%M %p")
+                    st.session_state.last_updated_dt = now_mmt
                     st.success("Movement logged successfully!")
                     st.rerun()
                 else:
@@ -287,7 +294,7 @@ elif action == "🔄 Log Movement (Take / Add)":
                     "Remark": remark,
                 }
                 st.session_state.transaction_logs = pd.concat([pd.DataFrame([new_log]), st.session_state.transaction_logs], ignore_index=True)
-                st.session_state.last_updated = now_mmt.strftime("%d %b %Y, %I:%M %p")
+                st.session_state.last_updated_dt = now_mmt
                 st.success("Restock logged successfully!")
                 st.rerun()
 
@@ -314,7 +321,7 @@ elif action == "➕ Add New Item":
             else:
                 new_row = pd.DataFrame([{"Items": item_name, "Qty": quantity, "Unit": unit, "Remark": remark}])
                 st.session_state.inventory = pd.concat([st.session_state.inventory, new_row], ignore_index=True)
-                st.session_state.last_updated = datetime.now(MM_TZ).strftime("%d %b %Y, %I:%M %p")
+                st.session_state.last_updated_dt = get_mmt_now()
                 st.success(f"Added '{item_name}' to inventory.")
                 st.rerun()
 
@@ -328,6 +335,8 @@ elif action == "📑 Reports & PNG Export":
         horizontal=True,
     )
 
+    now_mmt = get_mmt_now()
+
     if report_type == "Stock List Summary Report (Pic 1 Style)":
         title_text = "Marketing Collaterals Stock List of FCC MDY"
         st.markdown(f"### {title_text}")
@@ -339,7 +348,7 @@ elif action == "📑 Reports & PNG Export":
         st.download_button(
             label="🖼️ Export Stock List Report as PNG",
             data=png_bytes,
-            file_name=f"Stock_List_Report_{datetime.now(MM_TZ).strftime('%Y%m%d')}.png",
+            file_name=f"Stock_List_Report_{now_mmt.strftime('%Y%m%d')}.png",
             mime="image/png",
         )
 
@@ -360,6 +369,6 @@ elif action == "📑 Reports & PNG Export":
         st.download_button(
             label="🖼️ Export In/Out Log Report as PNG",
             data=png_bytes,
-            file_name=f"InOut_Record_Report_{datetime.now(MM_TZ).strftime('%Y%m%d')}.png",
+            file_name=f"InOut_Record_Report_{now_mmt.strftime('%Y%m%d')}.png",
             mime="image/png",
         )
