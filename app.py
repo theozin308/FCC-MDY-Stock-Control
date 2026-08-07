@@ -6,7 +6,6 @@ st.set_page_config(page_title="Marketing Collaterals Stock List", layout="wide")
 st.title("📦 Marketing Collaterals Stock List - FCC MDY")
 st.caption("Updated As Of 31 July 2026")
 
-# Initial data loaded without serial numbers
 INITIAL_DATA = [
     {"Items": "Rose Gold Vaccum Bottle", "Qty": 94, "Unit": "Pcs", "Remark": ""},
     {"Items": "Folding Umbrella", "Qty": 196, "Unit": "Pcs", "Remark": ""},
@@ -32,11 +31,17 @@ INITIAL_DATA = [
     {"Items": "X Stand", "Qty": 3, "Unit": "Pcs", "Remark": "FCC MDY Logo"},
 ]
 
-# Initialize inventory session state
 if "inventory" not in st.session_state:
     st.session_state.inventory = pd.DataFrame(INITIAL_DATA)
 
-# Sidebar navigation
+# Custom Column Configuration to match your requested widths
+column_configuration = {
+    "Items": st.column_config.TextColumn("Items", width="large"),
+    "Qty": st.column_config.NumberColumn("Qty", width="small"),
+    "Unit": st.column_config.TextColumn("Unit", width="small"),
+    "Remark": st.column_config.TextColumn("Remark", width="large"),
+}
+
 action = st.sidebar.radio("Select Action", ["View / Edit Inventory", "Log Stock Movement (Take / Add)", "Add New Item"])
 
 # --- OPTION 1: View / Edit Inventory ---
@@ -46,6 +51,7 @@ if action == "View / Edit Inventory":
 
     edited_df = st.data_editor(
         st.session_state.inventory,
+        column_config=column_configuration,
         num_rows="dynamic",
         use_container_width=True,
         key="inventory_editor",
@@ -65,8 +71,6 @@ elif action == "Log Stock Movement (Take / Add)":
         st.warning("Inventory is empty.")
     else:
         selected_item = st.selectbox("Select Item", items)
-        
-        # If there are duplicate items (e.g., Pullup Banner), differentiate by Remark
         matching_rows = st.session_state.inventory[st.session_state.inventory["Items"] == selected_item]
         
         if len(matching_rows) > 1:
@@ -120,6 +124,11 @@ st.subheader("⚠️ Low Stock Summary (Qty ≤ 10)")
 low_stock_df = st.session_state.inventory[st.session_state.inventory["Qty"] <= 10]
 
 if not low_stock_df.empty:
-    st.dataframe(low_stock_df[["Items", "Qty", "Unit", "Remark"]], use_container_width=True, hide_index=True)
+    st.dataframe(
+        low_stock_df[["Items", "Qty", "Unit", "Remark"]],
+        column_config=column_configuration,
+        use_container_width=True,
+        hide_index=True,
+    )
 else:
     st.info("All items have healthy stock levels (> 10).")
