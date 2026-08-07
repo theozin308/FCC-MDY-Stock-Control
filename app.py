@@ -239,7 +239,7 @@ elif action == "🔄 Log Movement (Take / Add)":
     if not items:
         st.warning("Inventory is empty.")
     else:
-        # OUTSIDE THE FORM: Selectbox updates dynamically on change!
+        # Placed outside form to update stock count immediately on select change
         selected_item = st.selectbox("Select Item", items)
         matching_rows = st.session_state.inventory[
             st.session_state.inventory["Items"] == selected_item
@@ -262,10 +262,9 @@ elif action == "🔄 Log Movement (Take / Add)":
         unit_val = st.session_state.inventory.at[target_index, "Unit"]
         current_qty = st.session_state.inventory.at[target_index, "Qty"]
 
-        # Dynamic live stock status
-        st.markdown(f"**Current Stock:** `<font color='#2E7D32'><b>{current_qty} {unit_val}</b></font>`", unsafe_allow_html=True)
+        # Clean Streamlit formatting syntax for colored text
+        st.markdown(f"**Current Stock:** :green[**{current_qty} {unit_val}**]")
 
-        # INSIDE THE FORM: Input details & fast submit
         with st.form("movement_form", clear_on_submit=True):
             movement_type = st.radio(
                 "Movement Type",
