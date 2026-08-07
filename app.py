@@ -239,30 +239,34 @@ elif action == "🔄 Log Movement (Take / Add)":
     if not items:
         st.warning("Inventory is empty.")
     else:
-        with st.form("movement_form", clear_on_submit=True):
-            selected_item = st.selectbox("Select Item", items)
-            matching_rows = st.session_state.inventory[
-                st.session_state.inventory["Items"] == selected_item
+        # OUTSIDE THE FORM: Selectbox updates dynamically on change!
+        selected_item = st.selectbox("Select Item", items)
+        matching_rows = st.session_state.inventory[
+            st.session_state.inventory["Items"] == selected_item
+        ]
+
+        if len(matching_rows) > 1:
+            row_options = [
+                f"Remark: {row['Remark'] or 'None'} (Qty: {row['Qty']})"
+                for _, row in matching_rows.iterrows()
             ]
+            selected_row_idx = st.selectbox(
+                "Select Specific Entry",
+                range(len(row_options)),
+                format_func=lambda x: row_options[x],
+            )
+            target_index = matching_rows.index[selected_row_idx]
+        else:
+            target_index = matching_rows.index[0]
 
-            if len(matching_rows) > 1:
-                row_options = [
-                    f"Remark: {row['Remark'] or 'None'} (Qty: {row['Qty']})"
-                    for _, row in matching_rows.iterrows()
-                ]
-                selected_row_idx = st.selectbox(
-                    "Select Specific Entry",
-                    range(len(row_options)),
-                    format_func=lambda x: row_options[x],
-                )
-                target_index = matching_rows.index[selected_row_idx]
-            else:
-                target_index = matching_rows.index[0]
+        unit_val = st.session_state.inventory.at[target_index, "Unit"]
+        current_qty = st.session_state.inventory.at[target_index, "Qty"]
 
-            unit_val = st.session_state.inventory.at[target_index, "Unit"]
-            current_qty = st.session_state.inventory.at[target_index, "Qty"]
+        # Dynamic live stock status
+        st.markdown(f"**Current Stock:** `<font color='#2E7D32'><b>{current_qty} {unit_val}</b></font>`", unsafe_allow_html=True)
 
-            st.write(f"**Current Stock:** `{current_qty} {unit_val}`")
+        # INSIDE THE FORM: Input details & fast submit
+        with st.form("movement_form", clear_on_submit=True):
             movement_type = st.radio(
                 "Movement Type",
                 ["Take (Withdraw)", "Add (Restock)"],
@@ -365,7 +369,7 @@ elif action == "🔄 Log Movement (Take / Add)":
                     )
                     st.rerun()
 
-# --- View & Manage Logs (With Delete Log & Stock Reset) ---
+# --- View & Manage Logs ---
 elif action == "📋 View In/Out Logs":
     st.subheader("📋 Marketing Collaterals In/Out Record")
 
@@ -374,10 +378,8 @@ elif action == "📋 View In/Out Logs":
     else:
         st.caption("Need to revert a mistake? Delete a log below to automatically restore stock quantities.")
         
-        # Display each log entry with an Action/Delete button
         logs_df = st.session_state.transaction_logs.copy()
         
-        # Iterate over logs row by row
         for idx, row in logs_df.iterrows():
             cols = st.columns([1, 1.2, 1.2, 2, 0.8, 0.6, 0.8, 1.2, 1, 1.5, 1])
             
@@ -406,17 +408,15 @@ elif action == "📋 View In/Out Logs":
                     item_name = row["Items"]
                     qty_str = str(row["Qty"])
                     
-                    # Determine adjustment value (reversing the transaction)
                     if qty_str.startswith("+"):
                         val = int(qty_str.replace("+", ""))
-                        adj = -val  # Reverse addition by subtracting
+                        adj = -val
                     elif qty_str.startswith("-"):
                         val = int(qty_str.replace("-", ""))
-                        adj = val   # Reverse withdrawal by adding back
+                        adj = val
                     else:
                         adj = 0
 
-                    # Adjust stock in inventory
                     item_idx = st.session_state.inventory[st.session_state.inventory["Items"] == item_name].index
                     if not item_idx.empty:
                         target = item_idx[0]
@@ -425,7 +425,6 @@ elif action == "📋 View In/Out Logs":
                     else:
                         new_qty = "N/A"
 
-                    # Remove the log row
                     st.session_state.transaction_logs = st.session_state.transaction_logs[
                         st.session_state.transaction_logs["Log_ID"] != row["Log_ID"]
                     ].reset_index(drop=True)
@@ -504,7 +503,6 @@ elif action == "📑 Reports & PNG Export":
         title_text = "Marketing Collaterals In/Out Record"
         st.markdown(f"### {title_text}")
 
-        # Drop internal ID column before displaying/exporting
         display_logs = st.session_state.transaction_logs.drop(columns=["Log_ID"], errors="ignore")
 
         if display_logs.empty:
