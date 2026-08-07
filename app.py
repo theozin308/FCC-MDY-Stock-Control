@@ -1,30 +1,32 @@
 from datetime import datetime
+import io
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
 st.set_page_config(page_title="Marketing Collaterals Stock List", layout="wide")
 
-# Initial inventory dataset from image data
+# Initial inventory dataset matching 1st image format
 INITIAL_DATA = [
-    {"Items": "Rose Gold Vaccum Bottle Set", "Qty": 96, "Unit": "Pcs", "Remark": "Box Blue, Vaccum Bottle, Mobile bag & bag String and keychain"},
-    {"Items": "Folding Umbrella", "Qty": 216, "Unit": "Pcs", "Remark": ""},
-    {"Items": "UV Car Wind Sheild Umbrella", "Qty": 100, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Door Gift", "Qty": 50, "Unit": "Pcs", "Remark": "Recycle bag, notepad and keychain"},
-    {"Items": "FCC Notebook Set", "Qty": 39, "Unit": "Pcs", "Remark": ""},
-    {"Items": "FCC Paper bag", "Qty": 500, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Coffee Cup Gift Set", "Qty": 85, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Coffee Cup Gift Set's Bag", "Qty": 65, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Thadingyut Set", "Qty": 2, "Unit": "Set", "Remark": ""},
-    {"Items": "White Mug", "Qty": 127, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Recycle Coffee Gift Set", "Qty": 10, "Unit": "Set", "Remark": ""},
-    {"Items": "Mini Fan", "Qty": 53, "Unit": "Pcs", "Remark": ""},
-    {"Items": "FCC Notepad", "Qty": 200, "Unit": "Pcs", "Remark": ""},
-    {"Items": "FCC Keychain", "Qty": 200, "Unit": "Pcs", "Remark": ""},
-    {"Items": "UV Car Wind Sheild", "Qty": 50, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Golf Umbrella", "Qty": 150, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Pullup Banner", "Qty": 6, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Pullup Banner", "Qty": 2, "Unit": "Pcs", "Remark": "Yangon Project (Used for MABA 10th year Anniversary Event)"},
-    {"Items": "X Stand", "Qty": 3, "Unit": "Pcs", "Remark": "FCC MDY Logo"},
+    {"Items": "Rose Gold Vaccum Bottle Set", "Qty": 96, "Unit": "", "Remark": "Box Blue, Vaccum Bottle, Mobile bag & bag String and keychain"},
+    {"Items": "Folding Umbrella", "Qty": 216, "Unit": "", "Remark": ""},
+    {"Items": "UV Car Wind Sheild Umbrella", "Qty": 100, "Unit": "", "Remark": ""},
+    {"Items": "Door Gift", "Qty": 50, "Unit": "", "Remark": "Recycle bag, notepad and keychain"},
+    {"Items": "FCC Notebook Set", "Qty": 39, "Unit": "", "Remark": ""},
+    {"Items": "FCC Paper bag", "Qty": 500, "Unit": "", "Remark": ""},
+    {"Items": "Coffee Cup Gift Set", "Qty": 85, "Unit": "", "Remark": ""},
+    {"Items": "Coffee Cup Gift Set's Bag", "Qty": 65, "Unit": "", "Remark": ""},
+    {"Items": "Thadingyut Set", "Qty": 2, "Unit": "", "Remark": ""},
+    {"Items": "White Mug", "Qty": 127, "Unit": "", "Remark": ""},
+    {"Items": "Recycle Coffee Gift Set", "Qty": 10, "Unit": "", "Remark": ""},
+    {"Items": "Mini Fan", "Qty": 53, "Unit": "", "Remark": ""},
+    {"Items": "FCC Notepad", "Qty": 200, "Unit": "", "Remark": ""},
+    {"Items": "FCC Keychain", "Qty": 200, "Unit": "", "Remark": ""},
+    {"Items": "UV Car Wind Sheild", "Qty": 50, "Unit": "", "Remark": ""},
+    {"Items": "Golf Umbrella", "Qty": 150, "Unit": "", "Remark": ""},
+    {"Items": "Pullup Banner", "Qty": 6, "Unit": "", "Remark": ""},
+    {"Items": "Pullup Banner", "Qty": 2, "Unit": "", "Remark": "Yangon Project (Used for MABA 10th year Anniversary Event)"},
+    {"Items": "X Stand", "Qty": 3, "Unit": "", "Remark": "FCC MDY Logo"},
 ]
 
 # Initialize Session States
@@ -32,62 +34,74 @@ if "inventory" not in st.session_state:
     st.session_state.inventory = pd.DataFrame(INITIAL_DATA)
 
 if "last_updated" not in st.session_state:
-    st.session_state.last_updated = datetime.now().strftime("%d %B %Y, %I:%M %p")
+    st.session_state.last_updated = datetime.now().strftime("%d %B %Y")
 
 if "transaction_logs" not in st.session_state:
     st.session_state.transaction_logs = pd.DataFrame(
-        columns=["No", "Date", "Issued By", "Description", "Items", "Qty", "Unit", "Balance", "Received By", "Sign", "Remark"]
+        columns=["Date", "Issued By", "Description", "Items", "Qty", "Unit", "Balance", "Received By", "Sign", "Remark"]
     )
 
 # Header
-st.title("📦 Marketing Collaterals Management System")
-st.caption(f"Updated As Of: **{st.session_state.last_updated}**")
-
-# Column configurations
-inventory_column_config = {
-    "No": st.column_config.NumberColumn("No", width="small"),
-    "Items": st.column_config.TextColumn("Items", width="large"),
-    "Qty": st.column_config.NumberColumn("Qty", width="small"),
-    "Unit": st.column_config.TextColumn("Unit", width="small"),
-    "Remark": st.column_config.TextColumn("Remark", width="large"),
-}
-
-log_column_config = {
-    "No": st.column_config.NumberColumn("No", width="small"),
-    "Date": st.column_config.TextColumn("Date", width="small"),
-    "Issued By": st.column_config.TextColumn("Issued By", width="medium"),
-    "Description": st.column_config.TextColumn("Description", width="large"),
-    "Items": st.column_config.TextColumn("Items", width="medium"),
-    "Qty": st.column_config.TextColumn("Qty", width="small"),
-    "Unit": st.column_config.TextColumn("Unit", width="small"),
-    "Balance": st.column_config.NumberColumn("Balance", width="small"),
-    "Received By": st.column_config.TextColumn("Received By", width="medium"),
-    "Sign": st.column_config.TextColumn("Sign", width="small"),
-    "Remark": st.column_config.TextColumn("Remark", width="large"),
-}
+st.title("📦 Marketing Collaterals Stock System - FCC MDY")
 
 # Navigation Sidebar
 action = st.sidebar.radio(
     "Select Action",
-    ["View Inventory", "Log Stock Movement (Take / Add)", "Add New Item", "📊 Reports & Records"],
+    ["View Inventory", "Log Stock Movement (Take / Add)", "Reports & PNG Export", "Add New Item"],
 )
+
+# Function to generate PNG image from DataFrame styled like official sheet
+def dataframe_to_png(df, title):
+    # Add sequential 'No' column for official report layout
+    report_df = df.copy()
+    report_df.insert(0, "No", range(1, len(report_df) + 1))
+    
+    fig, ax = plt.subplots(figsize=(14, max(4, len(report_df) * 0.45)))
+    ax.axis('tight')
+    ax.axis('off')
+    
+    # Title Banner
+    plt.title(title, fontsize=16, fontweight='bold', pad=20)
+    
+    # Render Table
+    table = ax.table(
+        cellText=report_df.values,
+        colLabels=report_df.columns,
+        cellLoc='center',
+        loc='center'
+    )
+    
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    table.scale(1.2, 1.8)
+    
+    # Style header row (Blue background matching image 2)
+    for (row, col), cell in table.get_celld().items():
+        if row == 0:
+            cell.set_facecolor('#C6D9F1')
+            cell.set_text_props(weight='bold')
+        cell.set_linewidth(0.8)
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight', dpi=200)
+    buf.seek(0)
+    plt.close(fig)
+    return buf
 
 # --- OPTION 1: View Inventory ---
 if action == "View Inventory":
     st.subheader("Current Stock Table")
-    display_df = st.session_state.inventory.copy()
-    display_df.insert(0, "No", range(1, len(display_df) + 1))
+    st.caption(f"Updated As Of: **{st.session_state.last_updated}**")
 
     st.dataframe(
-        display_df,
-        column_config=inventory_column_config,
+        st.session_state.inventory,
         use_container_width=True,
         hide_index=True,
     )
 
 # --- OPTION 2: Log Stock Movement (Take / Add) ---
 elif action == "Log Stock Movement (Take / Add)":
-    st.subheader("Log Stock Movement")
+    st.subheader("Log Stock Movement & In/Out Record")
 
     items = st.session_state.inventory["Items"].unique().tolist()
     if not items:
@@ -117,18 +131,15 @@ elif action == "Log Stock Movement (Take / Add)":
         with col2:
             description = st.text_input("Description", value="Withdrawal" if movement_type == "Take (Withdraw)" else "Restock")
             sign = st.text_input("Sign", value="Signed")
-            remark = st.text_input("Remark (Optional)")
+            remark = st.text_input("Remark")
 
         if st.button("Confirm Movement & Log"):
-            log_no = len(st.session_state.transaction_logs) + 1
-
             if movement_type == "Take (Withdraw)":
                 if current_qty >= qty_change:
                     new_balance = current_qty - qty_change
                     st.session_state.inventory.at[target_index, "Qty"] = new_balance
 
                     new_log = {
-                        "No": log_no,
                         "Date": datetime.now().strftime("%Y-%m-%d"),
                         "Issued By": issued_by,
                         "Description": description,
@@ -141,10 +152,10 @@ elif action == "Log Stock Movement (Take / Add)":
                         "Remark": remark,
                     }
                     st.session_state.transaction_logs = pd.concat(
-                        [st.session_state.transaction_logs, pd.DataFrame([new_log])], ignore_index=True
+                        [pd.DataFrame([new_log]), st.session_state.transaction_logs], ignore_index=True
                     )
-                    st.session_state.last_updated = datetime.now().strftime("%d %B %Y, %I:%M %p")
-                    st.success(f"Removed {qty_change} units. Log created!")
+                    st.session_state.last_updated = datetime.now().strftime("%d %B %Y")
+                    st.success("Movement recorded successfully!")
                     st.rerun()
                 else:
                     st.error(f"Cannot withdraw {qty_change} units. Only {current_qty} in stock!")
@@ -153,7 +164,6 @@ elif action == "Log Stock Movement (Take / Add)":
                 st.session_state.inventory.at[target_index, "Qty"] = new_balance
 
                 new_log = {
-                    "No": log_no,
                     "Date": datetime.now().strftime("%Y-%m-%d"),
                     "Issued By": issued_by,
                     "Description": description,
@@ -166,20 +176,62 @@ elif action == "Log Stock Movement (Take / Add)":
                     "Remark": remark,
                 }
                 st.session_state.transaction_logs = pd.concat(
-                    [st.session_state.transaction_logs, pd.DataFrame([new_log])], ignore_index=True
+                    [pd.DataFrame([new_log]), st.session_state.transaction_logs], ignore_index=True
                 )
-                st.session_state.last_updated = datetime.now().strftime("%d %B %Y, %I:%M %p")
-                st.success(f"Added {qty_change} units. Log created!")
+                st.session_state.last_updated = datetime.now().strftime("%d %B %Y")
+                st.success("Stock added successfully!")
                 st.rerun()
 
-# --- OPTION 3: Add New Item ---
+# --- OPTION 3: Reports & PNG Export ---
+elif action == "Reports & PNG Export":
+    st.subheader("📊 Report Generation & PNG Export")
+
+    report_type = st.selectbox(
+        "Select Report Type",
+        ["1. Total Items & Stock Summary Report", "2. Store In/Out Log Record Report"]
+    )
+
+    if report_type == "1. Total Items & Stock Summary Report":
+        st.markdown(f"### Marketing Collaterals Stock List of FCC MDY - Updated As Of {st.session_state.last_updated}")
+        st.dataframe(st.session_state.inventory, use_container_width=True, hide_index=True)
+
+        # PNG Export
+        png_title = f"Marketing Collaterals Stock List of FCC MDY - Updated As Of {st.session_state.last_updated}"
+        png_file = dataframe_to_png(st.session_state.inventory, png_title)
+
+        st.download_button(
+            label="🖼️ Download Report as PNG",
+            data=png_file,
+            file_name=f"Stock_Summary_Report_{datetime.now().strftime('%Y%m%d')}.png",
+            mime="image/png"
+        )
+
+    else:
+        st.markdown("### Marketing Collaterals In/Out Record")
+        if st.session_state.transaction_logs.empty:
+            st.info("No transaction logs recorded yet.")
+        else:
+            st.dataframe(st.session_state.transaction_logs, use_container_width=True, hide_index=True)
+
+            # PNG Export
+            png_title = "Marketing Collaterals In/Out Record"
+            png_file = dataframe_to_png(st.session_state.transaction_logs, png_title)
+
+            st.download_button(
+                label="🖼️ Download In/Out Log Report as PNG",
+                data=png_file,
+                file_name=f"Store_InOut_Record_{datetime.now().strftime('%Y%m%d')}.png",
+                mime="image/png"
+            )
+
+# --- OPTION 4: Add New Item ---
 elif action == "Add New Item":
     st.subheader("Add a New Item to Stock")
 
     with st.form("add_item_form", clear_on_submit=True):
         item_name = st.text_input("Item Name")
         quantity = st.number_input("Initial Quantity", min_value=0, value=0)
-        unit = st.text_input("Unit", value="Pcs")
+        unit = st.text_input("Unit", value="")
         remark = st.text_input("Remark")
 
         submitted = st.form_submit_button("Add Item")
@@ -190,80 +242,6 @@ elif action == "Add New Item":
             else:
                 new_row = pd.DataFrame([{"Items": item_name, "Qty": quantity, "Unit": unit, "Remark": remark}])
                 st.session_state.inventory = pd.concat([st.session_state.inventory, new_row], ignore_index=True)
-
-                log_no = len(st.session_state.transaction_logs) + 1
-                new_log = {
-                    "No": log_no,
-                    "Date": datetime.now().strftime("%Y-%m-%d"),
-                    "Issued By": "System",
-                    "Description": "New Item Creation",
-                    "Items": item_name,
-                    "Qty": f"+{quantity}",
-                    "Unit": unit,
-                    "Balance": quantity,
-                    "Received By": "Store",
-                    "Sign": "System",
-                    "Remark": remark,
-                }
-                st.session_state.transaction_logs = pd.concat(
-                    [st.session_state.transaction_logs, pd.DataFrame([new_log])], ignore_index=True
-                )
-
-                st.session_state.last_updated = datetime.now().strftime("%d %B %Y, %I:%M %p")
+                st.session_state.last_updated = datetime.now().strftime("%d %B %Y")
                 st.success(f"Successfully added '{item_name}' to inventory.")
                 st.rerun()
-
-# --- OPTION 4: Reports Page ---
-elif action == "📊 Reports & Records":
-    st.header("📊 Stock & Transaction Reports")
-
-    report_tab1, report_tab2 = st.tabs(["1. Total Items & Stock Report", "2. Store In/Out Log Record"])
-
-    # TAB 1: Stock Report (Matching 1st Picture)
-    with report_tab1:
-        st.subheader("Marketing Collaterals Stock List of FCC MDY")
-
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Unique Item Types", len(st.session_state.inventory))
-        col2.metric("Total Stock Quantity", st.session_state.inventory["Qty"].sum())
-        col3.metric("Low Stock Items (Qty ≤ 10)", len(st.session_state.inventory[st.session_state.inventory["Qty"] <= 10]))
-
-        st.divider()
-
-        stock_report_df = st.session_state.inventory.copy()
-        stock_report_df.insert(0, "No", range(1, len(stock_report_df) + 1))
-
-        st.dataframe(
-            stock_report_df,
-            column_config=inventory_column_config,
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        st.download_button(
-            label="📥 Export Stock Report to CSV",
-            data=stock_report_df.to_csv(index=False),
-            file_name=f"Stock_List_Report_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-        )
-
-    # TAB 2: In/Out Record (Matching 2nd Picture)
-    with report_tab2:
-        st.subheader("Marketing Collaterals In/Out Record")
-
-        if st.session_state.transaction_logs.empty:
-            st.info("No transaction records logged yet.")
-        else:
-            st.dataframe(
-                st.session_state.transaction_logs,
-                column_config=log_column_config,
-                use_container_width=True,
-                hide_index=True,
-            )
-
-            st.download_button(
-                label="📥 Export In/Out Record to CSV",
-                data=st.session_state.transaction_logs.to_csv(index=False),
-                file_name=f"InOut_Log_Record_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv",
-            )
