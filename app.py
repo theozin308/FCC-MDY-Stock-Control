@@ -5,7 +5,44 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="Marketing Collaterals Stock System", layout="wide")
+st.set_page_config(
+    page_title="Marketing Collaterals Stock System",
+    page_icon="📦",
+    layout="wide",
+)
+
+# ---------------------------------------------------------
+# CUSTOM CSS FOR PROFESSIONAL SIDEBAR STYLING
+# ---------------------------------------------------------
+st.markdown(
+    """
+    <style>
+        /* Sidebar container styling */
+        [data-testid="stSidebar"] {
+            background-color: #F8F9FA;
+            border-right: 1px solid #E9ECEF;
+        }
+        
+        /* Radio button label formatting */
+        [data-testid="stSidebar"] .stRadio label {
+            font-size: 0.95rem !important;
+            font-weight: 500 !important;
+            color: #333333 !important;
+            padding: 6px 10px !important;
+            border-radius: 6px !important;
+            transition: all 0.2s ease;
+        }
+        
+        /* Highlight active selected radio option */
+        [data-testid="stSidebar"] [data-checked="true"] label {
+            background-color: #2C3E50 !important;
+            color: #FFFFFF !important;
+            font-weight: 600 !important;
+        }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
 
 # ---------------------------------------------------------
 # 1. INITIAL DATASET & SESSION STATE INITIALIZATION
@@ -39,7 +76,7 @@ if "inventory" not in st.session_state:
     st.session_state.inventory = pd.DataFrame(INITIAL_DATA)
 
 if "last_updated" not in st.session_state:
-    st.session_state.last_updated = datetime.now().strftime("%d %B %Y, %I:%M %p")
+    st.session_state.last_updated = datetime.now().strftime("%d %b %Y, %I:%M %p")
 
 if "transaction_logs" not in st.session_state:
     st.session_state.transaction_logs = pd.DataFrame(
@@ -49,18 +86,32 @@ if "transaction_logs" not in st.session_state:
 st.title("📦 Marketing Collaterals Stock List - FCC MDY")
 
 # ---------------------------------------------------------
-# 2. SIDEBAR NAVIGATION
+# 2. ENHANCED SIDEBAR NAVIGATION
 # ---------------------------------------------------------
-action = st.sidebar.radio(
-    "Select Action",
-    [
-        "View Inventory",
-        "Log Stock Movement (Take / Add)",
-        "View In/Out Log Record",
-        "Add New Item",
-        "Reports & PNG Export",
-    ],
-)
+with st.sidebar:
+    st.image("https://img.icons8.com/color/96/box-settings.png", width=64)
+    st.markdown("### **FCC MDY Stock Manager**")
+    st.caption("Inventory & Movement System")
+    st.divider()
+
+    action = st.radio(
+        "NAVIGATION",
+        [
+            "📦 View Inventory",
+            "🔄 Log Movement (Take / Add)",
+            "📋 View In/Out Logs",
+            "➕ Add New Item",
+            "📑 Reports & PNG Export",
+        ],
+        label_visibility="visible",
+    )
+
+    st.divider()
+
+    # System status indicator & timestamps
+    st.caption("🟢 **Status:** Operational")
+    st.caption(f"🕒 **Updated:** {st.session_state.last_updated}")
+    st.caption("🏢 **Location:** FCC Mandalay")
 
 
 # ---------------------------------------------------------
@@ -69,17 +120,14 @@ action = st.sidebar.radio(
 def generate_report_png(df, title, is_log_report=False):
     report_df = df.copy()
 
-    # Add sequential 'No' column if missing
     if "No" not in report_df.columns:
         report_df.insert(0, "No", range(1, len(report_df) + 1))
 
-    # Add blank template rows if transaction log is empty
     if report_df.empty and is_log_report:
         blank_data = {col: [""] * 8 for col in report_df.columns}
         blank_data["No"] = list(range(1, 9))
         report_df = pd.DataFrame(blank_data)
 
-    # 1. Column Widths & Wrap Constraints
     if is_log_report:
         col_widths = [0.05, 0.09, 0.10, 0.12, 0.15, 0.06, 0.05, 0.07, 0.10, 0.06, 0.15]
         wrap_limits = {"Items": 18, "Description": 15, "Remark": 18, "Issued By": 12, "Received By": 12}
@@ -89,7 +137,6 @@ def generate_report_png(df, title, is_log_report=False):
         wrap_limits = {"Items": 35, "Remark": 30}
         fig_width = 11
 
-    # 2. Text Wrapping
     wrapped_data = []
     for _, row in report_df.iterrows():
         new_row = []
@@ -100,11 +147,9 @@ def generate_report_png(df, title, is_log_report=False):
             new_row.append(val_str)
         wrapped_data.append(new_row)
 
-    # Calculate height based on line counts from text wrapping
     total_lines = sum(max(cell.count("\n") + 1 for cell in row) for row in wrapped_data)
     fig_height = max(4.0, (total_lines + 2) * 0.38)
 
-    # 3. Figure Creation
     fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=300)
     ax.axis("off")
 
@@ -122,11 +167,10 @@ def generate_report_png(df, title, is_log_report=False):
     table.set_fontsize(font_size)
     table.scale(1.0, 1.8)
 
-    # 4. Styling & Alignment
-    header_bg = "#2C3E50"  # Dark Slate Blue
-    header_fg = "#FFFFFF"  # White Text
-    row_even_bg = "#F8F9FA"  # Light Gray
-    row_odd_bg = "#FFFFFF"  # Pure White
+    header_bg = "#2C3E50"
+    header_fg = "#FFFFFF"
+    row_even_bg = "#F8F9FA"
+    row_odd_bg = "#FFFFFF"
 
     left_align_cols = {"Items", "Description", "Remark", "Issued By", "Received By"}
 
@@ -158,13 +202,13 @@ def generate_report_png(df, title, is_log_report=False):
 # ---------------------------------------------------------
 
 # --- View Inventory ---
-if action == "View Inventory":
+if action == "📦 View Inventory":
     st.subheader("Current Stock Table")
     st.caption(f"Updated As Of: **{st.session_state.last_updated}**")
     st.dataframe(st.session_state.inventory, use_container_width=True, hide_index=True)
 
 # --- Log Stock Movement ---
-elif action == "Log Stock Movement (Take / Add)":
+elif action == "🔄 Log Movement (Take / Add)":
     st.subheader("Log Stock Movement & In/Out Record")
     items = st.session_state.inventory["Items"].unique().tolist()
 
@@ -216,7 +260,7 @@ elif action == "Log Stock Movement (Take / Add)":
                         "Remark": remark,
                     }
                     st.session_state.transaction_logs = pd.concat([pd.DataFrame([new_log]), st.session_state.transaction_logs], ignore_index=True)
-                    st.session_state.last_updated = datetime.now().strftime("%d %B %Y, %I:%M %p")
+                    st.session_state.last_updated = datetime.now().strftime("%d %b %Y, %I:%M %p")
                     st.success("Movement logged successfully!")
                     st.rerun()
                 else:
@@ -238,12 +282,12 @@ elif action == "Log Stock Movement (Take / Add)":
                     "Remark": remark,
                 }
                 st.session_state.transaction_logs = pd.concat([pd.DataFrame([new_log]), st.session_state.transaction_logs], ignore_index=True)
-                st.session_state.last_updated = datetime.now().strftime("%d %B %Y, %I:%M %p")
+                st.session_state.last_updated = datetime.now().strftime("%d %b %Y, %I:%M %p")
                 st.success("Restock logged successfully!")
                 st.rerun()
 
 # --- View Log Record ---
-elif action == "View In/Out Log Record":
+elif action == "📋 View In/Out Logs":
     st.subheader("📋 Marketing Collaterals In/Out Record")
     if st.session_state.transaction_logs.empty:
         st.info("No movements recorded yet.")
@@ -251,7 +295,7 @@ elif action == "View In/Out Log Record":
         st.dataframe(st.session_state.transaction_logs, use_container_width=True, hide_index=True)
 
 # --- Add New Item ---
-elif action == "Add New Item":
+elif action == "➕ Add New Item":
     st.subheader("Add a New Item to Stock")
     with st.form("add_item_form", clear_on_submit=True):
         item_name = st.text_input("Item Name")
@@ -265,12 +309,12 @@ elif action == "Add New Item":
             else:
                 new_row = pd.DataFrame([{"Items": item_name, "Qty": quantity, "Unit": unit, "Remark": remark}])
                 st.session_state.inventory = pd.concat([st.session_state.inventory, new_row], ignore_index=True)
-                st.session_state.last_updated = datetime.now().strftime("%d %B %Y, %I:%M %p")
+                st.session_state.last_updated = datetime.now().strftime("%d %b %Y, %I:%M %p")
                 st.success(f"Added '{item_name}' to inventory.")
                 st.rerun()
 
 # --- Reports & PNG Export ---
-elif action == "Reports & PNG Export":
+elif action == "📑 Reports & PNG Export":
     st.subheader("📑 Report Generation & PNG Export")
 
     report_type = st.radio(
