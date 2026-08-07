@@ -1,6 +1,7 @@
 from datetime import datetime
 import io
 import textwrap
+from zoneinfo import ZoneInfo
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
@@ -10,6 +11,9 @@ st.set_page_config(
     page_icon="📦",
     layout="wide",
 )
+
+# Set Myanmar Timezone (UTC+6:30)
+MM_TZ = ZoneInfo("Asia/Yangon")
 
 # ---------------------------------------------------------
 # CUSTOM CSS FOR PROFESSIONAL SIDEBAR STYLING
@@ -28,7 +32,7 @@ st.markdown(
             font-size: 0.95rem !important;
             font-weight: 500 !important;
             color: #333333 !important;
-            padding: 6px 10px !important;
+            padding: 8px 12px !important;
             border-radius: 6px !important;
             transition: all 0.2s ease;
         }
@@ -76,7 +80,7 @@ if "inventory" not in st.session_state:
     st.session_state.inventory = pd.DataFrame(INITIAL_DATA)
 
 if "last_updated" not in st.session_state:
-    st.session_state.last_updated = datetime.now().strftime("%d %b %Y, %I:%M %p")
+    st.session_state.last_updated = datetime.now(MM_TZ).strftime("%d %b %Y, %I:%M %p")
 
 if "transaction_logs" not in st.session_state:
     st.session_state.transaction_logs = pd.DataFrame(
@@ -108,10 +112,10 @@ with st.sidebar:
 
     st.divider()
 
-    # System status indicator & timestamps
+    # System status indicator & timestamps (MMT)
     st.caption("🟢 **Status:** Operational")
-    st.caption(f"🕒 **Updated:** {st.session_state.last_updated}")
-    st.caption("🏢 **Location:** FCC Mandalay")
+    st.caption(f"🕒 **Updated (MMT):** {st.session_state.last_updated}")
+    st.caption("🏢 **Location:** FCC Mandalay (UTC+6:30)")
 
 
 # ---------------------------------------------------------
@@ -204,7 +208,7 @@ def generate_report_png(df, title, is_log_report=False):
 # --- View Inventory ---
 if action == "📦 View Inventory":
     st.subheader("Current Stock Table")
-    st.caption(f"Updated As Of: **{st.session_state.last_updated}**")
+    st.caption(f"Updated As Of: **{st.session_state.last_updated} (MMT)**")
     st.dataframe(st.session_state.inventory, use_container_width=True, hide_index=True)
 
 # --- Log Stock Movement ---
@@ -242,13 +246,14 @@ elif action == "🔄 Log Movement (Take / Add)":
             remark = st.text_input("Remark")
 
         if st.button("Confirm Movement & Log"):
+            now_mmt = datetime.now(MM_TZ)
             if movement_type == "Take (Withdraw)":
                 if current_qty >= qty_change:
                     new_balance = current_qty - qty_change
                     st.session_state.inventory.at[target_index, "Qty"] = new_balance
 
                     new_log = {
-                        "Date": datetime.now().strftime("%Y-%m-%d"),
+                        "Date": now_mmt.strftime("%Y-%m-%d"),
                         "Issued By": issued_by,
                         "Description": description,
                         "Items": selected_item,
@@ -260,7 +265,7 @@ elif action == "🔄 Log Movement (Take / Add)":
                         "Remark": remark,
                     }
                     st.session_state.transaction_logs = pd.concat([pd.DataFrame([new_log]), st.session_state.transaction_logs], ignore_index=True)
-                    st.session_state.last_updated = datetime.now().strftime("%d %b %Y, %I:%M %p")
+                    st.session_state.last_updated = now_mmt.strftime("%d %b %Y, %I:%M %p")
                     st.success("Movement logged successfully!")
                     st.rerun()
                 else:
@@ -270,7 +275,7 @@ elif action == "🔄 Log Movement (Take / Add)":
                 st.session_state.inventory.at[target_index, "Qty"] = new_balance
 
                 new_log = {
-                    "Date": datetime.now().strftime("%Y-%m-%d"),
+                    "Date": now_mmt.strftime("%Y-%m-%d"),
                     "Issued By": issued_by,
                     "Description": description,
                     "Items": selected_item,
@@ -282,7 +287,7 @@ elif action == "🔄 Log Movement (Take / Add)":
                     "Remark": remark,
                 }
                 st.session_state.transaction_logs = pd.concat([pd.DataFrame([new_log]), st.session_state.transaction_logs], ignore_index=True)
-                st.session_state.last_updated = datetime.now().strftime("%d %b %Y, %I:%M %p")
+                st.session_state.last_updated = now_mmt.strftime("%d %b %Y, %I:%M %p")
                 st.success("Restock logged successfully!")
                 st.rerun()
 
@@ -309,7 +314,7 @@ elif action == "➕ Add New Item":
             else:
                 new_row = pd.DataFrame([{"Items": item_name, "Qty": quantity, "Unit": unit, "Remark": remark}])
                 st.session_state.inventory = pd.concat([st.session_state.inventory, new_row], ignore_index=True)
-                st.session_state.last_updated = datetime.now().strftime("%d %b %Y, %I:%M %p")
+                st.session_state.last_updated = datetime.now(MM_TZ).strftime("%d %b %Y, %I:%M %p")
                 st.success(f"Added '{item_name}' to inventory.")
                 st.rerun()
 
@@ -334,7 +339,7 @@ elif action == "📑 Reports & PNG Export":
         st.download_button(
             label="🖼️ Export Stock List Report as PNG",
             data=png_bytes,
-            file_name=f"Stock_List_Report_{datetime.now().strftime('%Y%m%d')}.png",
+            file_name=f"Stock_List_Report_{datetime.now(MM_TZ).strftime('%Y%m%d')}.png",
             mime="image/png",
         )
 
@@ -355,6 +360,6 @@ elif action == "📑 Reports & PNG Export":
         st.download_button(
             label="🖼️ Export In/Out Log Report as PNG",
             data=png_bytes,
-            file_name=f"InOut_Record_Report_{datetime.now().strftime('%Y%m%d')}.png",
+            file_name=f"InOut_Record_Report_{datetime.now(MM_TZ).strftime('%Y%m%d')}.png",
             mime="image/png",
         )
