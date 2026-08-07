@@ -1,12 +1,15 @@
 from datetime import datetime
 import io
+import textwrap
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
 st.set_page_config(page_title="Marketing Collaterals Stock System", layout="wide")
 
-# Initial inventory dataset
+# ---------------------------------------------------------
+# 1. INITIAL DATASET & SESSION STATE INITIALIZATION
+# ---------------------------------------------------------
 INITIAL_DATA = [
     {"Items": "Rose Gold Vaccum Bottle", "Qty": 94, "Unit": "Pcs", "Remark": ""},
     {"Items": "Folding Umbrella", "Qty": 196, "Unit": "Pcs", "Remark": ""},
@@ -32,7 +35,6 @@ INITIAL_DATA = [
     {"Items": "X Stand", "Qty": 3, "Unit": "Pcs", "Remark": "FCC MDY Logo"},
 ]
 
-# Initialize Session States
 if "inventory" not in st.session_state:
     st.session_state.inventory = pd.DataFrame(INITIAL_DATA)
 
@@ -46,7 +48,9 @@ if "transaction_logs" not in st.session_state:
 
 st.title("📦 Marketing Collaterals Stock List - FCC MDY")
 
-# --- DEFINING ACTION VARIABLE (Fixes NameError) ---
+# ---------------------------------------------------------
+# 2. SIDEBAR NAVIGATION
+# ---------------------------------------------------------
 action = st.sidebar.radio(
     "Select Action",
     [
@@ -59,63 +63,107 @@ action = st.sidebar.radio(
 )
 
 
-# Helper function to generate styled table PNG images
+# ---------------------------------------------------------
+# 3. HELPER FUNCTION: GENERATE PNG TABLE REPORT
+# ---------------------------------------------------------
 def generate_report_png(df, title, is_log_report=False):
     report_df = df.copy()
 
-    # Add sequential 'No' column
+    # Add sequential 'No' column if missing
     if "No" not in report_df.columns:
         report_df.insert(0, "No", range(1, len(report_df) + 1))
 
-    # Add blank rows if transaction log is empty
+    # Add blank template rows if transaction log is empty
     if report_df.empty and is_log_report:
-        blank_data = {col: [""] * 10 for col in report_df.columns}
-        blank_data["No"] = list(range(1, 11))
+        blank_data = {col: [""] * 8 for col in report_df.columns}
+        blank_data["No"] = list(range(1, 9))
         report_df = pd.DataFrame(blank_data)
 
-    row_count = max(len(report_df), 5)
-    fig_height = max(3.5, row_count * 0.45)
-    fig_width = 14 if is_log_report else 10
+    # 1. Column Widths & Wrap Constraints
+    if is_log_report:
+        col_widths = [0.05, 0.09, 0.10, 0.12, 0.15, 0.06, 0.05, 0.07, 0.10, 0.06, 0.15]
+        wrap_limits = {"Items": 18, "Description": 15, "Remark": 18, "Issued By": 12, "Received By": 12}
+        fig_width = 16
+    else:
+        col_widths = [0.08, 0.42, 0.10, 0.10, 0.30]
+        wrap_limits = {"Items": 35, "Remark": 30}
+        fig_width = 11
 
-    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-    ax.axis("tight")
+    # 2. Text Wrapping
+    wrapped_data = []
+    for _, row in report_df.iterrows():
+        new_row = []
+        for col_name, val in row.items():
+            val_str = str(val) if pd.notna(val) else ""
+            if col_name in wrap_limits and len(val_str) > wrap_limits[col_name]:
+                val_str = textwrap.fill(val_str, width=wrap_limits[col_name])
+            new_row.append(val_str)
+        wrapped_data.append(new_row)
+
+    # Calculate height based on line counts from text wrapping
+    total_lines = sum(max(cell.count("\n") + 1 for cell in row) for row in wrapped_data)
+    fig_height = max(4.0, (total_lines + 2) * 0.38)
+
+    # 3. Figure Creation
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=300)
     ax.axis("off")
 
-    plt.title(title, fontsize=14, fontweight="bold", pad=15)
+    plt.title(title, fontsize=15, fontweight="bold", pad=20, color="#1A2530")
 
     table = ax.table(
-        cellText=report_df.values,
+        cellText=wrapped_data,
         colLabels=report_df.columns,
-        cellLoc="center",
+        colWidths=col_widths,
         loc="center",
     )
 
     table.auto_set_font_size(False)
-    table.set_fontsize(9 if is_log_report else 10)
-    table.scale(1.1, 1.6)
+    font_size = 8 if is_log_report else 9.5
+    table.set_fontsize(font_size)
+    table.scale(1.0, 1.8)
 
-    # Style header row (Blue background matching sheet designs)
-    header_color = "#B8CCE4" if is_log_report else "#DCE6F1"
-    for (row, col), cell in table.get_celld().items():
-        if row == 0:
-            cell.set_facecolor(header_color)
-            cell.set_text_props(weight="bold")
-        cell.set_linewidth(0.8)
+    # 4. Styling & Alignment
+    header_bg = "#2C3E50"  # Dark Slate Blue
+    header_fg = "#FFFFFF"  # White Text
+    row_even_bg = "#F8F9FA"  # Light Gray
+    row_odd_bg = "#FFFFFF"  # Pure White
+
+    left_align_cols = {"Items", "Description", "Remark", "Issued By", "Received By"}
+
+    for (row_idx, col_idx), cell in table.get_celld().items():
+        col_name = report_df.columns[col_idx]
+
+        cell.set_edgecolor("#D0D7DE")
+        cell.set_linewidth(0.7)
+
+        if row_idx == 0:
+            cell.set_facecolor(header_bg)
+            cell.set_text_props(weight="bold", color=header_fg, ha="center", va="center")
+        else:
+            bg_color = row_even_bg if row_idx % 2 == 0 else row_odd_bg
+            cell.set_facecolor(bg_color)
+
+            align = "left" if col_name in left_align_cols else "center"
+            cell.set_text_props(ha=align, va="center", color="#212529")
 
     buf = io.BytesIO()
-    plt.savefig(buf, format="png", bbox_inches="tight", dpi=200)
+    plt.savefig(buf, format="png", bbox_inches="tight", pad_inches=0.4, dpi=300)
     buf.seek(0)
     plt.close(fig)
     return buf
 
 
-# --- 1. VIEW INVENTORY ---
+# ---------------------------------------------------------
+# 4. PAGE ROUTING & LOGIC
+# ---------------------------------------------------------
+
+# --- View Inventory ---
 if action == "View Inventory":
     st.subheader("Current Stock Table")
     st.caption(f"Updated As Of: **{st.session_state.last_updated}**")
     st.dataframe(st.session_state.inventory, use_container_width=True, hide_index=True)
 
-# --- 2. LOG MOVEMENT ---
+# --- Log Stock Movement ---
 elif action == "Log Stock Movement (Take / Add)":
     st.subheader("Log Stock Movement & In/Out Record")
     items = st.session_state.inventory["Items"].unique().tolist()
@@ -194,7 +242,7 @@ elif action == "Log Stock Movement (Take / Add)":
                 st.success("Restock logged successfully!")
                 st.rerun()
 
-# --- 3. VIEW LOG RECORD ---
+# --- View Log Record ---
 elif action == "View In/Out Log Record":
     st.subheader("📋 Marketing Collaterals In/Out Record")
     if st.session_state.transaction_logs.empty:
@@ -202,7 +250,7 @@ elif action == "View In/Out Log Record":
     else:
         st.dataframe(st.session_state.transaction_logs, use_container_width=True, hide_index=True)
 
-# --- 4. ADD NEW ITEM ---
+# --- Add New Item ---
 elif action == "Add New Item":
     st.subheader("Add a New Item to Stock")
     with st.form("add_item_form", clear_on_submit=True):
@@ -221,7 +269,7 @@ elif action == "Add New Item":
                 st.success(f"Added '{item_name}' to inventory.")
                 st.rerun()
 
-# --- 5. REPORTS & PNG EXPORT ---
+# --- Reports & PNG Export ---
 elif action == "Reports & PNG Export":
     st.subheader("📑 Report Generation & PNG Export")
 
