@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pytz
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(
     page_title="Marketing Collaterals Stock System",
@@ -18,6 +19,61 @@ MM_TZ = pytz.timezone("Asia/Yangon")
 def get_mmt_now():
     return datetime.now(MM_TZ)
 
+
+# Google Sheets Setup
+INVENTORY_SHEET_URL = st.secrets["connections"]["gsheets"]["inventory_url"]
+LOGS_SHEET_URL = st.secrets["connections"]["gsheets"]["logs_url"]
+
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+
+def load_inventory():
+    try:
+        df = conn.read(spreadsheet=INVENTORY_SHEET_URL, ttl=0)
+        df["Qty"] = pd.to_numeric(df["Qty"], errors="coerce").fillna(0).astype(int)
+        return df
+    except Exception as e:
+        st.error(f"Error loading inventory from Google Sheets: {e}")
+        return pd.DataFrame(columns=["Items", "Qty", "Unit", "Remark"])
+
+
+def save_inventory(df):
+    conn.update(spreadsheet=INVENTORY_SHEET_URL, data=df)
+
+
+def load_logs():
+    try:
+        df = conn.read(spreadsheet=LOGS_SHEET_URL, ttl=0)
+        df["Balance"] = pd.to_numeric(df["Balance"], errors="coerce").fillna(0).astype(int)
+        return df
+    except Exception as e:
+        return pd.DataFrame(
+            columns=[
+                "Log_ID",
+                "Date",
+                "Issued By",
+                "Description",
+                "Items",
+                "Qty",
+                "Unit",
+                "Balance",
+                "Received By",
+                "Sign",
+                "Remark",
+            ]
+        )
+
+
+def save_logs(df):
+    conn.update(spreadsheet=LOGS_SHEET_URL, data=df)
+
+
+# Sync session state with Google Sheets
+st.session_state.inventory = load_inventory()
+st.session_state.transaction_logs = load_logs()
+
+if "last_updated_dt" not in st.session_state:
+    st.session_state.last_updated_dt = get_mmt_now()
 
 # Custom CSS styling
 st.markdown(
@@ -44,70 +100,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Initial dataset setup
-INITIAL_DATA = [
-    {"Items": "Rose Gold Vaccum Bottle", "Qty": 94, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Folding Umbrella", "Qty": 196, "Unit": "Pcs", "Remark": ""},
-    {"Items": "UV Car Wind Shield Umbrella", "Qty": 100, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Recycle Bag", "Qty": 40, "Unit": "Pcs", "Remark": ""},
-    {"Items": "FCC Notebook Set", "Qty": 64, "Unit": "Pcs", "Remark": ""},
-    {"Items": "FCC Paper bag", "Qty": 283, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Coffee Cup Gift Set", "Qty": 85, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Coffee Cup Gift Set's Bag", "Qty": 97, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Thadingyut Set", "Qty": 2, "Unit": "Set", "Remark": ""},
-    {"Items": "White Mug", "Qty": 243, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Recycle Coffee Gift Set", "Qty": 10, "Unit": "Set", "Remark": ""},
-    {"Items": "Mini Fan", "Qty": 53, "Unit": "Pcs", "Remark": ""},
-    {"Items": "FCC Notepad", "Qty": 183, "Unit": "Pcs", "Remark": ""},
-    {"Items": "FCC Keychain", "Qty": 121, "Unit": "Pcs", "Remark": ""},
-    {"Items": "UV Car UV Shield - Security", "Qty": 77, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Car UV Shield - Small", "Qty": 70, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Golf Umbrella", "Qty": 135, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Garden Umbrella", "Qty": 9, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Garden Umbrella Tripod", "Qty": 2, "Unit": "Pcs", "Remark": ""},
-    {"Items": "Pullup Banner", "Qty": 6, "Unit": "Pcs", "Remark": ""},
-    {
-        "Items": "Pullup Banner",
-        "Qty": 2,
-        "Unit": "Pcs",
-        "Remark": "Yangon Project (Used for MABA 10th year Anniversary Event)",
-    },
-    {"Items": "X Stand", "Qty": 3, "Unit": "Pcs", "Remark": "FCC MDY Logo"},
-]
-
-if "inventory" not in st.session_state:
-    st.session_state.inventory = pd.DataFrame(INITIAL_DATA)
-
-if "last_updated_dt" not in st.session_state:
-    st.session_state.last_updated_dt = get_mmt_now()
-
-if "transaction_logs" not in st.session_state:
-    st.session_state.transaction_logs = pd.DataFrame(
-        columns=[
-            "Log_ID",
-            "Date",
-            "Issued By",
-            "Description",
-            "Items",
-            "Qty",
-            "Unit",
-            "Balance",
-            "Received By",
-            "Sign",
-            "Remark",
-        ]
-    )
-
 st.title("📦 Marketing Collaterals Stock List - FCC MDY")
-formatted_last_updated = st.session_state.last_updated_dt.strftime(
-    "%d %b %Y, %I:%M %p"
-)
+formatted_last_updated = st.session_state.last_updated_dt.strftime("%d %b %Y, %I:%M %p")
 
 # Sidebar Navigation
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/box-settings.png", width=64)
     st.markdown("### **FCC MDY Stock Manager**")
-    st.caption("Inventory & Movement System")
+    st.caption("Inventory & Movement System (Google Sheets Synced)")
     st.divider()
 
     action = st.radio(
@@ -122,7 +122,7 @@ with st.sidebar:
     )
 
     st.divider()
-    st.caption("🟢 **Status:** Operational")
+    st.caption("🟢 **Status:** Connected to Google Sheets")
     st.caption(f"🕒 **Updated (MMT):** {formatted_last_updated}")
     st.caption("🏢 **Location:** FCC Mandalay (UTC+6:30)")
 
@@ -142,19 +142,7 @@ def generate_report_png(df, title, is_log_report=False):
         report_df = pd.DataFrame(blank_data)
 
     if is_log_report:
-        col_widths = [
-            0.05,
-            0.09,
-            0.10,
-            0.12,
-            0.15,
-            0.06,
-            0.05,
-            0.07,
-            0.10,
-            0.06,
-            0.15,
-        ]
+        col_widths = [0.05, 0.09, 0.10, 0.12, 0.15, 0.06, 0.05, 0.07, 0.10, 0.06, 0.15]
         wrap_limits = {
             "Items": 18,
             "Description": 15,
@@ -178,9 +166,7 @@ def generate_report_png(df, title, is_log_report=False):
             new_row.append(val_str)
         wrapped_data.append(new_row)
 
-    total_lines = sum(
-        max(cell.count("\n") + 1 for cell in row) for row in wrapped_data
-    )
+    total_lines = sum(max(cell.count("\n") + 1 for cell in row) for row in wrapped_data)
     fig_height = max(4.0, (total_lines + 2) * 0.38)
 
     fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=300)
@@ -197,13 +183,7 @@ def generate_report_png(df, title, is_log_report=False):
     table.set_fontsize(8 if is_log_report else 9.5)
     table.scale(1.0, 1.8)
 
-    left_align_cols = {
-        "Items",
-        "Description",
-        "Remark",
-        "Issued By",
-        "Received By",
-    }
+    left_align_cols = {"Items", "Description", "Remark", "Issued By", "Received By"}
     for (row_idx, col_idx), cell in table.get_celld().items():
         col_name = report_df.columns[col_idx]
         cell.set_edgecolor("#D0D7DE")
@@ -227,9 +207,7 @@ def generate_report_png(df, title, is_log_report=False):
 if action == "📦 View Inventory":
     st.subheader("Current Stock Table")
     st.caption(f"Updated As Of: **{formatted_last_updated} (MMT)**")
-    st.dataframe(
-        st.session_state.inventory, use_container_width=True, hide_index=True
-    )
+    st.dataframe(st.session_state.inventory, use_container_width=True, hide_index=True)
 
 # --- Log Movement ---
 elif action == "🔄 Log Movement (Take / Add)":
@@ -239,7 +217,6 @@ elif action == "🔄 Log Movement (Take / Add)":
     if not items:
         st.warning("Inventory is empty.")
     else:
-        # Placed outside form to update stock count immediately on select change
         selected_item = st.selectbox("Select Item", items)
         matching_rows = st.session_state.inventory[
             st.session_state.inventory["Items"] == selected_item
@@ -260,9 +237,8 @@ elif action == "🔄 Log Movement (Take / Add)":
             target_index = matching_rows.index[0]
 
         unit_val = st.session_state.inventory.at[target_index, "Unit"]
-        current_qty = st.session_state.inventory.at[target_index, "Qty"]
+        current_qty = int(st.session_state.inventory.at[target_index, "Qty"])
 
-        # Clean Streamlit formatting syntax for colored text
         st.markdown(f"**Current Stock:** :green[**{current_qty} {unit_val}**]")
 
         with st.form("movement_form", clear_on_submit=True):
@@ -274,18 +250,14 @@ elif action == "🔄 Log Movement (Take / Add)":
 
             col1, col2 = st.columns(2)
             with col1:
-                qty_change = st.number_input(
-                    "Quantity", min_value=1, value=1, step=1
-                )
+                qty_change = st.number_input("Quantity", min_value=1, value=1, step=1)
                 issued_by = st.text_input("Issued By")
                 received_by = st.text_input("Received By")
 
             with col2:
                 description = st.text_input(
                     "Description",
-                    value="Withdrawal"
-                    if movement_type == "Take (Withdraw)"
-                    else "Restock",
+                    value="Withdrawal" if movement_type == "Take (Withdraw)" else "Restock",
                 )
                 sign = st.text_input("Sign", value="Signed")
                 remark = st.text_input("Remark")
@@ -299,9 +271,7 @@ elif action == "🔄 Log Movement (Take / Add)":
                 if movement_type == "Take (Withdraw)":
                     if current_qty >= qty_change:
                         new_balance = current_qty - qty_change
-                        st.session_state.inventory.at[
-                            target_index, "Qty"
-                        ] = new_balance
+                        st.session_state.inventory.at[target_index, "Qty"] = new_balance
 
                         new_log = {
                             "Log_ID": log_id,
@@ -317,14 +287,14 @@ elif action == "🔄 Log Movement (Take / Add)":
                             "Remark": remark,
                         }
                         st.session_state.transaction_logs = pd.concat(
-                            [
-                                pd.DataFrame([new_log]),
-                                st.session_state.transaction_logs,
-                            ],
+                            [pd.DataFrame([new_log]), st.session_state.transaction_logs],
                             ignore_index=True,
                         )
-                        st.session_state.last_updated_dt = now_mmt
 
+                        save_inventory(st.session_state.inventory)
+                        save_logs(st.session_state.transaction_logs)
+
+                        st.session_state.last_updated_dt = now_mmt
                         st.toast(
                             f"✅ Withdrew {qty_change} x '{selected_item}'. New Balance: {new_balance}",
                             icon="📤",
@@ -336,9 +306,7 @@ elif action == "🔄 Log Movement (Take / Add)":
                         )
                 else:
                     new_balance = current_qty + qty_change
-                    st.session_state.inventory.at[
-                        target_index, "Qty"
-                    ] = new_balance
+                    st.session_state.inventory.at[target_index, "Qty"] = new_balance
 
                     new_log = {
                         "Log_ID": log_id,
@@ -354,14 +322,14 @@ elif action == "🔄 Log Movement (Take / Add)":
                         "Remark": remark,
                     }
                     st.session_state.transaction_logs = pd.concat(
-                        [
-                            pd.DataFrame([new_log]),
-                            st.session_state.transaction_logs,
-                        ],
+                        [pd.DataFrame([new_log]), st.session_state.transaction_logs],
                         ignore_index=True,
                     )
-                    st.session_state.last_updated_dt = now_mmt
 
+                    save_inventory(st.session_state.inventory)
+                    save_logs(st.session_state.transaction_logs)
+
+                    st.session_state.last_updated_dt = now_mmt
                     st.toast(
                         f"✅ Added {qty_change} x '{selected_item}'. New Balance: {new_balance}",
                         icon="📥",
@@ -376,12 +344,11 @@ elif action == "📋 View In/Out Logs":
         st.info("No movements recorded yet.")
     else:
         st.caption("Need to revert a mistake? Delete a log below to automatically restore stock quantities.")
-        
         logs_df = st.session_state.transaction_logs.copy()
-        
+
         for idx, row in logs_df.iterrows():
             cols = st.columns([1, 1.2, 1.2, 2, 0.8, 0.6, 0.8, 1.2, 1, 1.5, 1])
-            
+
             with cols[0]:
                 st.write(f"**{row['Date']}**")
             with cols[1]:
@@ -406,7 +373,7 @@ elif action == "📋 View In/Out Logs":
                 if st.button("🗑️ Delete", key=f"del_{row['Log_ID']}_{idx}"):
                     item_name = row["Items"]
                     qty_str = str(row["Qty"])
-                    
+
                     if qty_str.startswith("+"):
                         val = int(qty_str.replace("+", ""))
                         adj = -val
@@ -416,7 +383,9 @@ elif action == "📋 View In/Out Logs":
                     else:
                         adj = 0
 
-                    item_idx = st.session_state.inventory[st.session_state.inventory["Items"] == item_name].index
+                    item_idx = st.session_state.inventory[
+                        st.session_state.inventory["Items"] == item_name
+                    ].index
                     if not item_idx.empty:
                         target = item_idx[0]
                         st.session_state.inventory.at[target, "Qty"] += adj
@@ -428,8 +397,14 @@ elif action == "📋 View In/Out Logs":
                         st.session_state.transaction_logs["Log_ID"] != row["Log_ID"]
                     ].reset_index(drop=True)
 
+                    save_inventory(st.session_state.inventory)
+                    save_logs(st.session_state.transaction_logs)
+
                     st.session_state.last_updated_dt = get_mmt_now()
-                    st.toast(f"🗑️ Deleted log! Stock for '{item_name}' adjusted by {adj:+d} (Current: {new_qty})", icon="🔄")
+                    st.toast(
+                        f"🗑️ Deleted log! Stock for '{item_name}' adjusted by {adj:+d} (Current: {new_qty})",
+                        icon="🔄",
+                    )
                     st.rerun()
 
 # --- Add New Item ---
@@ -460,8 +435,10 @@ elif action == "➕ Add New Item":
                 st.session_state.inventory = pd.concat(
                     [st.session_state.inventory, new_row], ignore_index=True
                 )
-                st.session_state.last_updated_dt = get_mmt_now()
 
+                save_inventory(st.session_state.inventory)
+
+                st.session_state.last_updated_dt = get_mmt_now()
                 st.toast(
                     f"🎉 Successfully added new item: '{item_name}' ({quantity} {unit})",
                     icon="✨",
@@ -485,9 +462,7 @@ elif action == "📑 Reports & PNG Export":
     if report_type == "Stock List Summary Report (Pic 1 Style)":
         title_text = "Marketing Collaterals Stock List of FCC MDY"
         st.markdown(f"### {title_text}")
-        st.dataframe(
-            st.session_state.inventory, use_container_width=True, hide_index=True
-        )
+        st.dataframe(st.session_state.inventory, use_container_width=True, hide_index=True)
 
         png_bytes = generate_report_png(
             st.session_state.inventory, title_text, is_log_report=False
@@ -502,12 +477,12 @@ elif action == "📑 Reports & PNG Export":
         title_text = "Marketing Collaterals In/Out Record"
         st.markdown(f"### {title_text}")
 
-        display_logs = st.session_state.transaction_logs.drop(columns=["Log_ID"], errors="ignore")
+        display_logs = st.session_state.transaction_logs.drop(
+            columns=["Log_ID"], errors="ignore"
+        )
 
         if display_logs.empty:
-            st.info(
-                "No transaction logs recorded yet. Displaying blank structure template in PNG export."
-            )
+            st.info("No transaction logs recorded yet.")
             empty_df = pd.DataFrame(
                 columns=[
                     "Date",
@@ -524,14 +499,8 @@ elif action == "📑 Reports & PNG Export":
             )
             png_bytes = generate_report_png(empty_df, title_text, is_log_report=True)
         else:
-            st.dataframe(
-                display_logs,
-                use_container_width=True,
-                hide_index=True,
-            )
-            png_bytes = generate_report_png(
-                display_logs, title_text, is_log_report=True
-            )
+            st.dataframe(display_logs, use_container_width=True, hide_index=True)
+            png_bytes = generate_report_png(display_logs, title_text, is_log_report=True)
 
         st.download_button(
             label="🖼️ Export In/Out Log Report as PNG",
