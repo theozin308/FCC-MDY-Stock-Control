@@ -2,3 +2,4 @@ streamlit
 pandas
 matplotlib
 pytz
+st-gsheets-connection
