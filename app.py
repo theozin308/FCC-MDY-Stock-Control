@@ -29,9 +29,12 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_inventory():
     try:
-        df = conn.read(spreadsheet=INVENTORY_SHEET_URL, ttl=0)
-        df["Qty"] = pd.to_numeric(df["Qty"], errors="coerce").fillna(0).astype(int)
-        return df
+        # ttl=0 and use_cache=False force Streamlit to pull ALL fresh rows from Google Sheets
+        df = conn.read(spreadsheet=INVENTORY_SHEET_URL, ttl=0, use_cache=False)
+        if df is not None and not df.empty:
+            df["Qty"] = pd.to_numeric(df["Qty"], errors="coerce").fillna(0).astype(int)
+            return df
+        return pd.DataFrame(columns=["Items", "Qty", "Unit", "Remark"])
     except Exception as e:
         st.error(f"Error loading inventory from Google Sheets: {e}")
         return pd.DataFrame(columns=["Items", "Qty", "Unit", "Remark"])
@@ -39,13 +42,31 @@ def load_inventory():
 
 def save_inventory(df):
     conn.update(spreadsheet=INVENTORY_SHEET_URL, data=df)
+    st.cache_data.clear()
 
 
 def load_logs():
     try:
-        df = conn.read(spreadsheet=LOGS_SHEET_URL, ttl=0)
-        df["Balance"] = pd.to_numeric(df["Balance"], errors="coerce").fillna(0).astype(int)
-        return df
+        # ttl=0 and use_cache=False prevent truncation/caching of multi-page logs
+        df = conn.read(spreadsheet=LOGS_SHEET_URL, ttl=0, use_cache=False)
+        if df is not None and not df.empty:
+            df["Balance"] = pd.to_numeric(df["Balance"], errors="coerce").fillna(0).astype(int)
+            return df
+        return pd.DataFrame(
+            columns=[
+                "Log_ID",
+                "Date",
+                "Issued By",
+                "Description",
+                "Items",
+                "Qty",
+                "Unit",
+                "Balance",
+                "Received By",
+                "Sign",
+                "Remark",
+            ]
+        )
     except Exception as e:
         return pd.DataFrame(
             columns=[
@@ -66,6 +87,7 @@ def load_logs():
 
 def save_logs(df):
     conn.update(spreadsheet=LOGS_SHEET_URL, data=df)
+    st.cache_data.clear()
 
 
 # Sync session state with Google Sheets
@@ -346,66 +368,61 @@ elif action == "📋 View In/Out Logs":
         st.caption("Need to revert a mistake? Delete a log below to automatically restore stock quantities.")
         logs_df = st.session_state.transaction_logs.copy()
 
-        for idx, row in logs_df.iterrows():
-            cols = st.columns([1, 1.2, 1.2, 2, 0.8, 0.6, 0.8, 1.2, 1, 1.5, 1])
+        # Display full scrollable table with search/filter features built-in
+        st.dataframe(
+            logs_df.drop(columns=["Log_ID"], errors="ignore"),
+            use_container_width=True,
+            hide_index=True,
+        )
 
-            with cols[0]:
-                st.write(f"**{row['Date']}**")
-            with cols[1]:
-                st.write(row["Issued By"])
-            with cols[2]:
-                st.write(row["Description"])
-            with cols[3]:
-                st.write(f"**{row['Items']}**")
-            with cols[4]:
-                st.write(f"`{row['Qty']}`")
-            with cols[5]:
-                st.write(row["Unit"])
-            with cols[6]:
-                st.write(f"**{row['Balance']}**")
-            with cols[7]:
-                st.write(row["Received By"])
-            with cols[8]:
-                st.write(row["Sign"])
-            with cols[9]:
-                st.write(row["Remark"] if row["Remark"] else "-")
-            with cols[10]:
-                if st.button("🗑️ Delete", key=f"del_{row['Log_ID']}_{idx}"):
-                    item_name = row["Items"]
-                    qty_str = str(row["Qty"])
+        st.divider()
+        st.markdown("### 🗑️ Manage / Delete Recent Logs")
+        
+        # Paginated or selected log management to avoid layout breaking with large lists
+        log_options = [
+            f"{row['Date']} | {row['Items']} ({row['Qty']}) - Issued by: {row['Issued By']}"
+            for _, row in logs_df.iterrows()
+        ]
+        
+        selected_log_to_del = st.selectbox("Select Log to Revert & Delete", range(len(log_options)), format_func=lambda x: log_options[x])
+        
+        if st.button("🗑️ Delete Selected Log Entry"):
+            row = logs_df.iloc[selected_log_to_del]
+            item_name = row["Items"]
+            qty_str = str(row["Qty"])
 
-                    if qty_str.startswith("+"):
-                        val = int(qty_str.replace("+", ""))
-                        adj = -val
-                    elif qty_str.startswith("-"):
-                        val = int(qty_str.replace("-", ""))
-                        adj = val
-                    else:
-                        adj = 0
+            if qty_str.startswith("+"):
+                val = int(qty_str.replace("+", ""))
+                adj = -val
+            elif qty_str.startswith("-"):
+                val = int(qty_str.replace("-", ""))
+                adj = val
+            else:
+                adj = 0
 
-                    item_idx = st.session_state.inventory[
-                        st.session_state.inventory["Items"] == item_name
-                    ].index
-                    if not item_idx.empty:
-                        target = item_idx[0]
-                        st.session_state.inventory.at[target, "Qty"] += adj
-                        new_qty = st.session_state.inventory.at[target, "Qty"]
-                    else:
-                        new_qty = "N/A"
+            item_idx = st.session_state.inventory[
+                st.session_state.inventory["Items"] == item_name
+            ].index
+            if not item_idx.empty:
+                target = item_idx[0]
+                st.session_state.inventory.at[target, "Qty"] += adj
+                new_qty = st.session_state.inventory.at[target, "Qty"]
+            else:
+                new_qty = "N/A"
 
-                    st.session_state.transaction_logs = st.session_state.transaction_logs[
-                        st.session_state.transaction_logs["Log_ID"] != row["Log_ID"]
-                    ].reset_index(drop=True)
+            st.session_state.transaction_logs = st.session_state.transaction_logs[
+                st.session_state.transaction_logs["Log_ID"] != row["Log_ID"]
+            ].reset_index(drop=True)
 
-                    save_inventory(st.session_state.inventory)
-                    save_logs(st.session_state.transaction_logs)
+            save_inventory(st.session_state.inventory)
+            save_logs(st.session_state.transaction_logs)
 
-                    st.session_state.last_updated_dt = get_mmt_now()
-                    st.toast(
-                        f"🗑️ Deleted log! Stock for '{item_name}' adjusted by {adj:+d} (Current: {new_qty})",
-                        icon="🔄",
-                    )
-                    st.rerun()
+            st.session_state.last_updated_dt = get_mmt_now()
+            st.toast(
+                f"🗑️ Deleted log! Stock for '{item_name}' adjusted by {adj:+d} (Current: {new_qty})",
+                icon="🔄",
+            )
+            st.rerun()
 
 # --- Add New Item ---
 elif action == "➕ Add New Item":
